@@ -8,7 +8,6 @@ const { del } = require("../utils/redisUtils");
 const { handleServerError } = require("../utils/errorHandler");
 const { uploadToCloud } = require("../services/cloudService");
 const { encryptMessage, decryptMessage } = require("../utils/encryption");
-const { generateLinkPreview } = require("../services/linkPreviewService");
 const rateLimit = require("express-rate-limit");
 
 // Rate limiting: 30 messages per 15 seconds per user
