@@ -1,0 +1,179 @@
+-- CreateTable
+CREATE TABLE "User" (
+    "UserID" SERIAL NOT NULL,
+    "Username" TEXT NOT NULL,
+    "Email" TEXT NOT NULL,
+    "Password" TEXT NOT NULL,
+    "ProfilePicture" TEXT,
+    "Bio" TEXT,
+    "IsPrivate" BOOLEAN NOT NULL DEFAULT false,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "UpdatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "User_pkey" PRIMARY KEY ("UserID")
+);
+
+-- CreateTable
+CREATE TABLE "Post" (
+    "PostID" SERIAL NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "Content" TEXT NOT NULL,
+    "ImageURL" TEXT,
+    "VideoURL" TEXT,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "UpdatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Post_pkey" PRIMARY KEY ("PostID")
+);
+
+-- CreateTable
+CREATE TABLE "Story" (
+    "StoryID" SERIAL NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "MediaURL" TEXT NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ExpiresAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Story_pkey" PRIMARY KEY ("StoryID")
+);
+
+-- CreateTable
+CREATE TABLE "Comment" (
+    "CommentID" SERIAL NOT NULL,
+    "PostID" INTEGER NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "Content" TEXT NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Comment_pkey" PRIMARY KEY ("CommentID")
+);
+
+-- CreateTable
+CREATE TABLE "Like" (
+    "LikeID" SERIAL NOT NULL,
+    "PostID" INTEGER NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Like_pkey" PRIMARY KEY ("LikeID")
+);
+
+-- CreateTable
+CREATE TABLE "Message" (
+    "MessageID" SERIAL NOT NULL,
+    "SenderID" INTEGER NOT NULL,
+    "ReceiverID" INTEGER NOT NULL,
+    "Content" TEXT NOT NULL,
+    "IsRead" BOOLEAN NOT NULL DEFAULT false,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Message_pkey" PRIMARY KEY ("MessageID")
+);
+
+-- CreateTable
+CREATE TABLE "Follower" (
+    "FollowerID" SERIAL NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "FollowerUserID" INTEGER NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Follower_pkey" PRIMARY KEY ("FollowerID")
+);
+
+-- CreateTable
+CREATE TABLE "Notification" (
+    "NotificationID" SERIAL NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "Type" TEXT NOT NULL,
+    "Content" TEXT NOT NULL,
+    "IsRead" BOOLEAN NOT NULL DEFAULT false,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("NotificationID")
+);
+
+-- CreateTable
+CREATE TABLE "Report" (
+    "ReportID" SERIAL NOT NULL,
+    "PostID" INTEGER NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "Reason" TEXT NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Report_pkey" PRIMARY KEY ("ReportID")
+);
+
+-- CreateTable
+CREATE TABLE "SupportRequest" (
+    "RequestID" SERIAL NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "Subject" TEXT NOT NULL,
+    "Content" TEXT NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SupportRequest_pkey" PRIMARY KEY ("RequestID")
+);
+
+-- CreateTable
+CREATE TABLE "SavedPost" (
+    "SavedPostID" SERIAL NOT NULL,
+    "UserID" INTEGER NOT NULL,
+    "PostID" INTEGER NOT NULL,
+    "CreatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SavedPost_pkey" PRIMARY KEY ("SavedPostID")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_Username_key" ON "User"("Username");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_Email_key" ON "User"("Email");
+
+-- AddForeignKey
+ALTER TABLE "Post" ADD CONSTRAINT "Post_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Story" ADD CONSTRAINT "Story_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_PostID_fkey" FOREIGN KEY ("PostID") REFERENCES "Post"("PostID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Like" ADD CONSTRAINT "Like_PostID_fkey" FOREIGN KEY ("PostID") REFERENCES "Post"("PostID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Like" ADD CONSTRAINT "Like_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Message" ADD CONSTRAINT "Message_SenderID_fkey" FOREIGN KEY ("SenderID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Message" ADD CONSTRAINT "Message_ReceiverID_fkey" FOREIGN KEY ("ReceiverID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Follower" ADD CONSTRAINT "Follower_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Follower" ADD CONSTRAINT "Follower_FollowerUserID_fkey" FOREIGN KEY ("FollowerUserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Report" ADD CONSTRAINT "Report_PostID_fkey" FOREIGN KEY ("PostID") REFERENCES "Post"("PostID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Report" ADD CONSTRAINT "Report_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportRequest" ADD CONSTRAINT "SupportRequest_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SavedPost" ADD CONSTRAINT "SavedPost_UserID_fkey" FOREIGN KEY ("UserID") REFERENCES "User"("UserID") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SavedPost" ADD CONSTRAINT "SavedPost_PostID_fkey" FOREIGN KEY ("PostID") REFERENCES "Post"("PostID") ON DELETE RESTRICT ON UPDATE CASCADE;

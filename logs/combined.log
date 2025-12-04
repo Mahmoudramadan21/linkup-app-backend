@@ -1,0 +1,162 @@
+2025-04-18T14:43:37.581Z [error]: Redis Client Error: Error: Connection timeout
+2025-04-18T14:43:37.591Z [info]: Redis client reconnecting...
+2025-04-18T14:43:42.597Z [error]: Redis Client Error: Error: Connection timeout
+2025-04-18T14:43:42.799Z [info]: Redis client reconnecting...
+2025-04-18T14:43:47.805Z [error]: Redis Client Error: Error: Connection timeout
+2025-04-18T14:43:48.207Z [info]: Redis client reconnecting...
+2025-04-18T14:43:53.211Z [error]: Redis Client Error: Error: Connection timeout
+2025-04-18T14:43:53.812Z [info]: Redis client reconnecting...
+2025-04-18T14:43:58.815Z [error]: Redis Client Error: Error: Connection timeout
+2025-04-18T14:43:59.617Z [info]: Redis client reconnecting...
+2025-04-18T14:44:04.622Z [error]: Redis Client Error: Error: Connection timeout
+2025-04-18T14:44:05.623Z [info]: Redis client reconnecting...
+2025-04-18T14:44:10.627Z [error]: Max Redis retries reached
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:12:28.730Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:12:28.734Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:12:33.737Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:12:33.938Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:12:38.942Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:12:39.343Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:12:44.348Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:12:44.949Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:12:49.953Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:12:50.753Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:12:55.756Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:12:56.758Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-18T16:13:01.761Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:15:40.386Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:15:40.389Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:15:45.392Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:15:45.594Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:16:02.196Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:16:02.203Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:16:07.206Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:16:07.407Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:16:12.411Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:16:12.813Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:16:17.818Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:16:18.420Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:16:23.425Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:16:24.226Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T16:16:29.229Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T16:16:30.230Z"}
+{"level":"info","message":"Redis client ready","timestamp":"2025-04-18T22:22:38.031Z"}
+{"level":"info","message":"Connected to Upstash Redis successfully","timestamp":"2025-04-18T22:22:38.034Z"}
+{"level":"error","message":"Redis Client Error: Error: read ECONNRESET","timestamp":"2025-04-18T22:25:04.670Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T22:25:04.670Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T22:25:09.675Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T22:25:09.677Z"}
+{"level":"info","message":"Redis client ready","timestamp":"2025-04-18T22:25:14.524Z"}
+{"level":"info","message":"Redis client ready","timestamp":"2025-04-18T22:32:03.303Z"}
+{"level":"info","message":"Connected to Upstash Redis successfully","timestamp":"2025-04-18T22:32:03.305Z"}
+{"level":"info","message":"Redis client ready","timestamp":"2025-04-18T22:36:42.235Z"}
+{"level":"info","message":"Connected to Upstash Redis successfully","timestamp":"2025-04-18T22:36:42.238Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T22:44:50.507Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T22:44:50.510Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T22:44:55.513Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T22:44:55.715Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T22:45:00.719Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T22:45:01.121Z"}
+{"level":"info","message":"Redis client ready","timestamp":"2025-04-18T23:08:20.673Z"}
+{"level":"info","message":"Connected to Upstash Redis successfully","timestamp":"2025-04-18T23:08:20.676Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:08:42.366Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:08:42.368Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:08:47.373Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:08:47.574Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:08:52.578Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:08:52.979Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:08:57.983Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:08:58.583Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:09:03.587Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:09:04.390Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:09:09.393Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:09:10.394Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-18T23:09:15.399Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:16:57.056Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:16:57.059Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:17:02.063Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:17:02.264Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:17:07.266Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:17:07.667Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:17:12.672Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:17:13.273Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:17:18.276Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:17:19.077Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-18T23:17:24.081Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-18T23:17:25.082Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-18T23:17:30.085Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:32:51.692Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:32:51.707Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:32:56.717Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:32:56.918Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:33:01.923Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:33:02.324Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:33:07.328Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:33:07.930Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:33:12.933Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:33:13.734Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:33:18.738Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:33:19.740Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-19T08:33:24.745Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:34:03.117Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:34:03.121Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:34:08.124Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:34:08.326Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:34:13.330Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:34:13.732Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:34:18.736Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:34:19.339Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:34:24.342Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:34:25.144Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:34:30.147Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:34:31.149Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-19T08:34:36.151Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:39:14.303Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:39:14.308Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:39:19.312Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:39:19.514Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:39:24.520Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:39:24.923Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:39:29.927Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:39:30.528Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:39:35.536Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:39:36.336Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:39:41.340Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:39:42.341Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-19T08:39:47.345Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:56:19.357Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:56:19.362Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:56:24.365Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:56:24.567Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:56:29.576Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:56:29.978Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:56:34.982Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:56:35.584Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:56:40.587Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:56:41.389Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:56:46.391Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:56:47.392Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-19T08:56:52.396Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:57:48.684Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:57:48.690Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:57:53.692Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:57:53.894Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:57:58.898Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:57:59.299Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:58:04.303Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:58:04.904Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:58:09.908Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:58:10.710Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T08:58:15.712Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T08:58:16.713Z"}
+{"level":"error","message":"Max Redis retries reached","timestamp":"2025-04-19T08:58:21.716Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T09:05:20.600Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T09:05:20.611Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T09:05:25.618Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T09:05:25.819Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T09:05:30.825Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T09:05:31.226Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T09:05:36.232Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T09:05:36.834Z"}
+{"level":"error","message":"Redis Client Error: Error: Connection timeout","timestamp":"2025-04-19T09:05:41.838Z"}
+{"level":"info","message":"Redis client reconnecting...","timestamp":"2025-04-19T09:05:42.639Z"}
