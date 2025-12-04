@@ -34,6 +34,7 @@ const allowedOrigins = [
   "http://192.168.1.11:8000",
   "http://192.168.1.2:8000",
   "http://192.168.1.9:8000",
+  "https://linkup-app-frontend.vercel.app",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
