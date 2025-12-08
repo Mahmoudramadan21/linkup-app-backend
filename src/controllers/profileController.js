@@ -1,3 +1,4 @@
+const NotificationService = require("../services/notificationService");
 const logger = require("../utils/logger");
 const prisma = require("../utils/prisma");
 const bcrypt = require("bcryptjs");
@@ -400,12 +401,14 @@ const updateProfile = async (req, res) => {
     // Fetch current user data to get the old username
     const currentUser = await prisma.user.findUnique({
       where: { UserID: userId },
-      select: { Username: true },
+      select: { Username: true, IsPrivate: true },
     });
 
     if (!currentUser) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    const wasPrivate = currentUser.IsPrivate;
 
     // Upload profile picture if provided
     if (profilePictureFile) {
@@ -483,16 +486,20 @@ const updateProfile = async (req, res) => {
       }
     }
 
-    // Validate isPrivate if provided
+    // Parse incoming isPrivate value
     let parsedIsPrivate;
     if (typeof isPrivate !== "undefined") {
-      parsedIsPrivate = isPrivate === "true" || isPrivate === true;
-      if (typeof parsedIsPrivate !== "boolean") {
-        return res
-          .status(400)
-          .json({ message: "isPrivate must be a boolean (true or false)" });
-      }
+      if (isPrivate === "true" || isPrivate === true) parsedIsPrivate = true;
+      else if (isPrivate === "false" || isPrivate === false)
+        parsedIsPrivate = false;
+      else
+        return res.status(400).json({
+          message: "isPrivate must be true or false",
+        });
     }
+
+    // Detect privacy change (private -> public)
+    const becomingPublic = wasPrivate === true && parsedIsPrivate === false;
 
     // Generate profileName from firstName and lastName if provided
     let profileName;
@@ -538,6 +545,61 @@ const updateProfile = async (req, res) => {
         ProfileName: true,
       },
     });
+
+    if (becomingPublic) {
+      await prisma.post.updateMany({
+        where: { UserID: userId },
+        data: { privacy: "PUBLIC" },
+      });
+
+      const pendingFollowers = await prisma.follower.findMany({
+        where: { UserID: userId, Status: "PENDING" },
+        select: { FollowerUserID: true },
+      });
+
+      if (pendingFollowers.length > 0) {
+        await prisma.follower.updateMany({
+          where: { UserID: userId, Status: "PENDING" },
+          data: { Status: "ACCEPTED" },
+        });
+
+        const oldFollowRequestIds = await prisma.notification
+          .findMany({
+            where: {
+              UserID: userId,
+              Type: "FOLLOW_REQUEST",
+              SenderID: { in: pendingFollowers.map((f) => f.FollowerUserID) },
+            },
+            select: { NotificationID: true },
+          })
+          .then((n) => n.map((notif) => notif.NotificationID));
+
+        const deletedNotificationIds =
+          await NotificationService.deleteNotificationsAndEmit(
+            userId,
+            oldFollowRequestIds
+          );
+
+        await NotificationService.deleteOldFollowRequests(userId);
+
+        await Promise.all(
+          pendingFollowers.forEach((f) => {
+            if (f.FollowerUserID === userId) return;
+            NotificationService.createNotification({
+              userId: f.FollowerUserID,
+              senderId: userId,
+              type: "FOLLOW_ACCEPTED",
+              content: `@${updatedUser.Username} is now public! Your follow request was automatically approved`,
+              metadata: {
+                followedUserId: userId,
+                username: updatedUser.Username,
+                autoApproved: true,
+              },
+            });
+          })
+        );
+      }
+    }
 
     // Respond with the updated profile
     res.status(200).json({
@@ -607,14 +669,19 @@ const changePassword = async (req, res) => {
 
 /**
  * Updates user privacy setting (public/private account)
- * Returns updated profile information
+ * - Updates all posts privacy
+ * - Auto-accepts pending follow requests when going public
+ * - Sends real-time FOLLOW_ACCEPTED notifications via NotificationService
+ * - Emits real-time events correctly
  */
 const updatePrivacySettings = async (req, res) => {
   const { isPrivate } = req.body;
   const userId = req.user.UserID;
+  const username = req.user.Username;
+  const io = req.app.get("io");
 
   try {
-    const isPrivateBoolean = isPrivate === "true";
+    const isPrivateBoolean = isPrivate === true || isPrivate === "true";
 
     const currentUser = await prisma.user.findUnique({
       where: { UserID: userId },
@@ -622,16 +689,63 @@ const updatePrivacySettings = async (req, res) => {
     });
 
     if (!currentUser) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ error: "User not found" });
     }
 
-    const [updatedUser] = await prisma.$transaction([
-      prisma.user.update({
+    if (currentUser.IsPrivate === isPrivateBoolean) {
+      return res.status(200).json({
+        message: "No changes detected",
+        profile: { ...req.user, IsPrivate: isPrivateBoolean },
+      });
+    }
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
         where: { UserID: userId },
         data: { IsPrivate: isPrivateBoolean },
+      });
+
+      await prisma.post.updateMany({
+        where: { UserID: userId },
+        data: { privacy: isPrivateBoolean ? "FOLLOWERS_ONLY" : "PUBLIC" },
+      });
+
+      if (currentUser.IsPrivate && !isPrivateBoolean) {
+        const pendingFollowers = await tx.follower.findMany({
+          where: { UserID: userId, Status: "PENDING" },
+          select: { FollowerUserID: true },
+        });
+
+        if (pendingFollowers.length > 0) {
+          await tx.follower.updateMany({
+            where: { UserID: userId, Status: "PENDING" },
+            data: { Status: "ACCEPTED", UpdatedAt: new Date() },
+          });
+
+          await Promise.all(
+            pendingFollowers.map((f) =>
+              NotificationService.createNotification({
+                userId: f.FollowerUserID,
+                senderId: userId,
+                type: "FOLLOW_ACCEPTED",
+                content: `@${username} is now public! Your follow request was automatically approved`,
+                metadata: {
+                  followedUserId: userId,
+                  username,
+                  autoApproved: true,
+                },
+              })
+            )
+          );
+        }
+      }
+
+      return await tx.user.findUnique({
+        where: { UserID: userId },
         select: {
+          UserID: true,
           Username: true,
-          Email: true,
+          ProfileName: true,
           ProfilePicture: true,
           Bio: true,
           IsPrivate: true,
@@ -639,72 +753,22 @@ const updatePrivacySettings = async (req, res) => {
           CreatedAt: true,
           UpdatedAt: true,
         },
-      }),
-      prisma.post.updateMany({
-        where: { UserID: userId },
-        data: { privacy: isPrivateBoolean ? "FOLLOWERS_ONLY" : "PUBLIC" },
-      }),
-      ...(currentUser.IsPrivate && !isPrivateBoolean
-        ? [
-            prisma.follower.updateMany({
-              where: { UserID: userId, Status: "PENDING" },
-              data: { Status: "ACCEPTED", UpdatedAt: new Date() },
-            }),
-            prisma.notification.createMany({
-              data: await prisma.follower
-                .findMany({
-                  where: { UserID: userId, Status: "ACCEPTED" },
-                  select: { FollowerUserID: true },
-                })
-                .then((followers) =>
-                  followers.map((follower) => ({
-                    UserID: follower.FollowerUserID,
-                    Type: "FOLLOW_ACCEPTED",
-                    Content: `Your follow request to ${currentUser.Username} has been automatically approved.`,
-                    Metadata: { FollowedUserID: userId },
-                    CreatedAt: new Date(),
-                  }))
-                ),
-            }),
-          ]
-        : []),
-    ]);
-
-    // Emit privacy update event via Socket.IO if the instance is available
-    const io = req.app.get("io");
-    if (io) {
-      io.to(`user_${userId}`).emit("privacyUpdated", {
-        userId,
-        isPrivate: isPrivateBoolean,
-        timestamp: new Date(),
       });
-
-      if (currentUser.IsPrivate && !isPrivateBoolean) {
-        const approvedFollowers = await prisma.follower.findMany({
-          where: { UserID: userId, Status: "ACCEPTED" },
-          select: { FollowerUserID: true },
-        });
-        approvedFollowers.forEach((follower) => {
-          io.to(`user_${follower.FollowerUserID}`).emit("followAccepted", {
-            followedUserId: userId,
-            timestamp: new Date(),
-          });
-        });
-      }
-    } else {
-      console.warn(
-        "Socket.IO instance not found. Real-time privacy update emission skipped."
-      );
-    }
+    });
 
     res.status(200).json({
+      success: true,
       message: "Privacy settings updated successfully",
       profile: updatedUser,
     });
   } catch (error) {
+    logger.error(
+      `updatePrivacySettings error for user ${userId}: ${error.message}`
+    );
     res.status(500).json({
-      message: "Error updating privacy settings",
-      error: error.message,
+      error: "Failed to update privacy settings",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -1343,7 +1407,6 @@ class RateLimiter {
     const windowStart = now - 60000;
     const recentRequests = requests.filter((t) => t > windowStart);
 
-
     requests.push(now);
     return { remainingPoints: 5 - recentRequests.length - 1 };
   }
@@ -1405,11 +1468,11 @@ const followUser = async (req, res) => {
         REJECTED: "Your previous follow request was rejected",
       };
       return res.status(409).json({
-        error: statusMap[existingFollow.Status] || "Already following this user",
+        error:
+          statusMap[existingFollow.Status] || "Already following this user",
         status: existingFollow.Status,
       });
     }
-
 
     const follow = await prisma.follower.create({
       data: {
@@ -1419,7 +1482,7 @@ const followUser = async (req, res) => {
       },
     });
 
-    // Send notification based on preferences
+    // Use NotificationService instead of prisma directly
     const shouldNotify =
       !targetUser.NotificationPreferences ||
       !targetUser.NotificationPreferences.NotificationTypes ||
@@ -1432,25 +1495,23 @@ const followUser = async (req, res) => {
           ));
 
     if (shouldNotify) {
-      await prisma.notification.create({
-        data: {
-          UserID: targetUser.UserID,
-          SenderID: followerId,
-          Type: targetUser.IsPrivate ? "FOLLOW_REQUEST" : "FOLLOW",
-          Content: targetUser.IsPrivate
-            ? `${req.user.Username} wants to follow you`
-            : `${req.user.Username} started following you`,
-          Metadata: targetUser.IsPrivate
-            ? {
-                requestId: follow.FollowerID,
-                requesterId: followerId,
-                requesterUsername: req.user.Username,
-              }
-            : {
-                followerId: followerId,
-                followerUsername: req.user.Username,
-              },
-        },
+      await NotificationService.createNotification({
+        userId: targetUser.UserID,
+        senderId: followerId,
+        type: targetUser.IsPrivate ? "FOLLOW_REQUEST" : "FOLLOW",
+        content: targetUser.IsPrivate
+          ? `${req.user.Username} wants to follow you`
+          : `${req.user.Username} started following you`,
+        metadata: targetUser.IsPrivate
+          ? {
+              requestId: follow.FollowerID,
+              requesterId: followerId,
+              requesterUsername: req.user.Username,
+            }
+          : {
+              followerId: followerId,
+              followerUsername: req.user.Username,
+            },
       });
     }
 
@@ -1470,34 +1531,69 @@ const followUser = async (req, res) => {
 };
 
 /**
- * Removes follow relationship between users
- * Validates user IDs
+ * Removes follow relationship or pending follow request
+ * Also deletes related FOLLOW_REQUEST notification if it exists
  */
 const unfollowUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const followerId = req.user.UserID;
 
-    if (parseInt(userId) === followerId) {
+    const targetId = parseInt(userId);
+    if (targetId === followerId) {
       return res.status(400).json({ error: "Cannot unfollow yourself" });
     }
 
-    const result = await prisma.follower.deleteMany({
+    // Fetch follow record first (needed to remove related notification)
+    const existingFollow = await prisma.follower.findFirst({
       where: {
-        UserID: parseInt(userId),
+        UserID: targetId,
         FollowerUserID: followerId,
       },
     });
 
-    if (result.count === 0) {
+    if (!existingFollow) {
       return res.status(404).json({ error: "Follow relationship not found" });
     }
 
-    res.status(200).json({ message: "Unfollowed successfully" });
+    // Delete the follow record
+    await prisma.follower.delete({
+      where: { FollowerID: existingFollow.FollowerID },
+    });
+
+    let deletedNotificationIds = [];
+    // If it was a pending follow request → delete the notification and emit IDs
+    if (existingFollow.Status === "PENDING") {
+      const notifIdsToDelete = await prisma.notification
+        .findMany({
+          where: {
+            UserID: targetId, // the user who RECEIVED the request
+            SenderID: followerId, // the requester
+            Type: "FOLLOW_REQUEST",
+            Metadata: {
+              path: ["requestId"],
+              equals: existingFollow.FollowerID,
+            },
+          },
+          select: { NotificationID: true },
+        })
+        .then((n) => n.map((notif) => notif.NotificationID));
+
+      deletedNotificationIds =
+        await NotificationService.deleteNotificationsAndEmit(
+          targetId,
+          notifIdsToDelete
+        );
+    }
+
+    return res.status(200).json({
+      message: "Unfollowed successfully",
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Internal server error", details: error.message });
+    return res.status(500).json({
+      error: "Internal server error",
+      details: error.message,
+    });
   }
 };
 
@@ -1540,17 +1636,41 @@ const removeFollower = async (req, res) => {
 };
 
 /**
- * Accepts pending follow request and returns updated followers list
- * Validates request ownership before processing
+ * Accepts a pending follow request safely and deletes related notification
  */
 const acceptFollowRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user.UserID;
 
-    const updatedFollow = await prisma.follower.update({
+    const id = Number(requestId);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid request ID" });
+    }
+
+    // Fetch follow record to get sender info + ensure existence
+    const followRecord = await prisma.follower.findFirst({
       where: {
-        FollowerID: parseInt(requestId),
+        FollowerID: id,
+        UserID: userId,
+        Status: "PENDING",
+      },
+      select: {
+        FollowerID: true,
+        FollowerUserID: true,
+      },
+    });
+
+    if (!followRecord) {
+      return res.status(404).json({
+        error: "Follow request not found or already processed",
+      });
+    }
+
+    // Mark request as accepted safely
+    await prisma.follower.updateMany({
+      where: {
+        FollowerID: id,
         UserID: userId,
         Status: "PENDING",
       },
@@ -1558,23 +1678,28 @@ const acceptFollowRequest = async (req, res) => {
         Status: "ACCEPTED",
         UpdatedAt: new Date(),
       },
-      include: {
-        FollowerUser: {
-          select: {
-            UserID: true,
-            Username: true,
-            ProfilePicture: true,
-          },
-        },
-      },
     });
 
-    if (!updatedFollow) {
-      return res.status(404).json({
-        error: "Follow request not found or already processed",
-      });
-    }
+    // Delete related FOLLOW_REQUEST notifications and emit deleted IDs
+    const deletedNotificationIds =
+      await NotificationService.deleteNotificationsAndEmit(userId, [
+        ...(await prisma.notification
+          .findMany({
+            where: {
+              UserID: userId, // who RECEIVED the request
+              SenderID: followRecord.FollowerUserID, // who SENT the request
+              Type: "FOLLOW_REQUEST",
+              Metadata: {
+                path: ["requestId"],
+                equals: followRecord.FollowerID,
+              },
+            },
+            select: { NotificationID: true },
+          })
+          .then((n) => n.map((notif) => notif.NotificationID))),
+      ]);
 
+    // Get updated accepted followers list
     const acceptedFollowers = await prisma.follower.findMany({
       where: {
         UserID: userId,
@@ -1591,12 +1716,13 @@ const acceptFollowRequest = async (req, res) => {
       },
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Follow request accepted",
       acceptedFollowers: acceptedFollowers.map((f) => f.FollowerUser),
     });
   } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -1649,41 +1775,71 @@ const getPendingFollowRequests = async (req, res) => {
 };
 
 /**
- * Rejects follow request and removes the follow relationship
- * Validates request ownership before processing
+ * Rejects a follow request safely and deletes related notification
  */
 const rejectFollowRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user.UserID;
 
-    const deletedFollow = await prisma.follower.delete({
+    const id = Number(requestId);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid request ID" });
+    }
+
+    // Check existence first (without throwing errors)
+    const followRecord = await prisma.follower.findFirst({
       where: {
-        FollowerID: parseInt(requestId),
+        FollowerID: id,
         UserID: userId,
         Status: "PENDING",
       },
-      include: {
-        FollowerUser: {
-          select: {
-            UserID: true,
-            Username: true,
-          },
-        },
+      select: {
+        FollowerID: true,
+        FollowerUserID: true,
       },
     });
 
-    if (!deletedFollow) {
+    if (!followRecord) {
       return res.status(404).json({
         error: "Follow request not found or already processed",
       });
     }
 
-    res.status(200).json({
+    // Delete follow request safely
+    await prisma.follower.deleteMany({
+      where: {
+        FollowerID: id,
+        UserID: userId,
+        Status: "PENDING",
+      },
+    });
+
+    // Delete the related FOLLOW_REQUEST notification and emit deleted IDs
+    const deletedNotificationIds =
+      await NotificationService.deleteNotificationsAndEmit(userId, [
+        ...(await prisma.notification
+          .findMany({
+            where: {
+              UserID: userId,
+              SenderID: followRecord.FollowerUserID,
+              Type: "FOLLOW_REQUEST",
+              Metadata: {
+                path: ["requestId"],
+                equals: followRecord.FollowerID,
+              },
+            },
+            select: { NotificationID: true },
+          })
+          .then((n) => n.map((notif) => notif.NotificationID))),
+      ]);
+
+    return res.status(200).json({
       message: "Follow request rejected",
     });
   } catch (error) {
-    res.status(500).json({ error: "Internal server error" });
+    console.log(error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -1812,7 +1968,11 @@ const getFollowers = async (req, res) => {
         profilePicture: u.ProfilePicture,
         isPrivate: u.IsPrivate,
         bio: u.Bio,
-        isFollowed: followingIds.has(u.UserID) ? true : pendingIds.has(u.UserID) ? "pending" : false,
+        isFollowed: followingIds.has(u.UserID)
+          ? true
+          : pendingIds.has(u.UserID)
+          ? "pending"
+          : false,
         isCurrentUser: u.UserID === currentUserId,
         followCreatedAt: f.CreatedAt,
       });

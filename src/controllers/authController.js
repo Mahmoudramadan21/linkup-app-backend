@@ -15,8 +15,8 @@ const SALT_ROUNDS = 10; // Define salt rounds
 // Cookie options for security
 const getCookieOptions = (isRefresh = false) => ({
   httpOnly: true, // Prevents client-side JS from accessing the cookie
-  secure: process.env.NODE_ENV === "production", // Use secure cookies in production (HTTPS)
-  sameSite: "Strict", // Protects against CSRF attacks
+  secure: true, // Use secure cookies in production (HTTPS)
+  sameSite: "none", // Protects against CSRF attacks
   maxAge: isRefresh ? 7 * 24 * 60 * 60 * 1000 : 15 * 60 * 1000, // 7 days for refresh, 15 mins for access
   path: "/", // Available site-wide
 });

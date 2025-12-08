@@ -1,3 +1,4 @@
+const NotificationService = require("../services/notificationService");
 const logger = require("../utils/logger");
 const prisma = require("../utils/prisma");
 const {
@@ -248,26 +249,27 @@ const getUserStories = async (req, res) => {
         const isMine = story.UserID === currentUserId;
 
         const storyResponse = {
-            storyId: story.StoryID,
-            createdAt: story.CreatedAt,
-            mediaUrl: story.MediaURL,
-            expiresAt: story.ExpiresAt,
-            isViewed,
-            isLiked,
-            isMine: isMine,
-          };
+          storyId: story.StoryID,
+          createdAt: story.CreatedAt,
+          mediaUrl: story.MediaURL,
+          expiresAt: story.ExpiresAt,
+          isViewed,
+          isLiked,
+          isMine: isMine,
+        };
 
-          if (isMine) {
-            storyResponse.likeCount = adjustedLikeCount;
-            storyResponse.viewCount = adjustedViewCount;
-            storyResponse.latestViewers = prioritizeViewers(story.StoryViews, story.StoryID);
-          }
+        if (isMine) {
+          storyResponse.likeCount = adjustedLikeCount;
+          storyResponse.viewCount = adjustedViewCount;
+          storyResponse.latestViewers = prioritizeViewers(
+            story.StoryViews,
+            story.StoryID
+          );
+        }
 
         return storyResponse;
-
-          }),
-        };
-        
+      }),
+    };
 
     await setWithTracking(cacheKey, formattedUser, 60, user.UserID.toString());
     res.json(formattedUser);
@@ -827,40 +829,47 @@ const recordStoryView = async (req, res) => {
 };
 
 /**
- * Creates notification for story like
+ * Creates notification for story like (using NotificationService - full real-time support)
  */
 async function createStoryLikeNotification(storyId, likerId, likerUsername) {
-  const story = await prisma.story.findUnique({
-    where: { StoryID: parseInt(storyId) },
-    select: { UserID: true },
-  });
+  try {
+    const story = await prisma.story.findUnique({
+      where: { StoryID: parseInt(storyId) },
+      select: { UserID: true },
+    });
 
-  if (!story || story.UserID === likerId) return;
+    if (!story || story.UserID === likerId) return;
 
-  const recipient = await prisma.user.findUnique({
-    where: { UserID: story.UserID },
-    select: { NotificationPreferences: true },
-  });
+    const recipient = await prisma.user.findUnique({
+      where: { UserID: story.UserID },
+      select: { NotificationPreferences: true },
+    });
 
-  const shouldNotify =
-    !recipient.NotificationPreferences ||
-    !recipient.NotificationPreferences.NotificationTypes ||
-    recipient.NotificationPreferences.NotificationTypes.includes("STORY_LIKE");
+    const shouldNotify =
+      !recipient?.NotificationPreferences?.NotificationTypes ||
+      recipient.NotificationPreferences.NotificationTypes.includes(
+        "STORY_LIKE"
+      );
 
-  if (shouldNotify) {
-    await prisma.notification.create({
-      data: {
-        UserID: story.UserID,
-        SenderID: likerId,
-        Type: "STORY_LIKE",
-        Content: `${likerUsername} liked your story`,
-        Metadata: {
-          storyId: parseInt(storyId),
-          likerId,
-          likerUsername,
-        },
+    if (!shouldNotify) return;
+
+    await NotificationService.createNotification({
+      userId: story.UserID,
+      senderId: likerId,
+      type: "STORY_LIKE",
+      content: `${likerUsername} liked your story`,
+      metadata: {
+        storyId: parseInt(storyId),
+        likerId,
+        likerUsername,
       },
     });
+
+    logger.info(
+      `Story like notification sent to user ${story.UserID} from ${likerId}`
+    );
+  } catch (error) {
+    logger.error(`Failed to send story like notification: ${error.message}`);
   }
 }
 
@@ -1168,49 +1177,53 @@ async function clearStoriesCache(userId, storyId) {
   }
 }
 
-// Updated notifyAdminsAboutReport to handle both posts and stories
+/**
+ * Notifies all admins about a reported post or story
+ * Uses NotificationService → full real-time, email, count update, preferences respect
+ */
 async function notifyAdminsAboutReport(
   itemId,
   reporterId,
   reason,
   reporterUsername,
-  type = "POST"
+  type = "POST" // "POST" or "STORY"
 ) {
   try {
     const itemType = type === "STORY" ? "story" : "post";
+    const displayReason =
+      reason.length > 50 ? reason.substring(0, 50) + "..." : reason;
+
     const admins = await prisma.user.findMany({
       where: { Role: "ADMIN" },
-      select: { UserID: true, NotificationPreferences: true },
+      select: { UserID: true },
     });
 
-    const notifications = admins
-      .filter(
-        (admin) =>
-          !admin.NotificationPreferences ||
-          !admin.NotificationPreferences.NotificationTypes ||
-          admin.NotificationPreferences.NotificationTypes.includes("REPORT")
-      )
-      .map((admin) =>
-        prisma.notification.create({
-          data: {
-            UserID: admin.UserID,
-            SenderID: reporterId,
-            Type: "REPORT",
-            Content: `${reporterUsername} reported a ${itemType}: ${reason}`,
-            Metadata: {
-              itemType,
-              itemId,
-              reporterId,
-              reason,
-              reporterUsername,
-            },
-          },
-        })
-      );
+    if (admins.length === 0) {
+      logger.warn("No admins found to notify about report");
+      return;
+    }
 
-    await Promise.all(notifications);
+    const notificationPromises = admins.map((admin) =>
+      NotificationService.createNotification({
+        userId: admin.UserID,
+        senderId: reporterId,
+        type: "REPORT",
+        content: `${reporterUsername} reported a ${itemType}: ${displayReason}`,
+        metadata: {
+          itemType,
+          itemId: parseInt(itemId),
+          reporterId,
+          reason,
+          reporterUsername,
+          fullReason: reason,
+        },
+      })
+    );
+
+    await Promise.all(notificationPromises);
+
     logger.info(
-      `Notified admins about ${itemType} report ID ${itemId} by user ${reporterId}`
+      `Successfully notified ${admins.length} admin(s) about ${itemType} report (ID: ${itemId})`
     );
   } catch (error) {
     logger.error(

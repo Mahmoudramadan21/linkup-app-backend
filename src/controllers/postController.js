@@ -9,6 +9,8 @@ const {
   handleForbiddenError,
 } = require("../utils/errorHandler");
 
+const NotificationService = require("../services/notificationService");
+
 // Constants for configuration
 const POST_CACHE_TTL = 3600; // 1 hour cache duration for debugging
 const ALLOWED_IMAGE_TYPES = ["jpg", "jpeg", "png", "gif", "webp"];
@@ -80,40 +82,42 @@ function groupBy(arr, keyFn) {
  * Creates notification for post like
  */
 async function createLikeNotification(postId, likerId, likerUsername) {
-  const post = await prisma.post.findUnique({
-    where: { PostID: parseInt(postId) },
-    select: { UserID: true },
-  });
+  try {
+    const post = await prisma.post.findUnique({
+      where: { PostID: parseInt(postId) },
+      select: { UserID: true },
+    });
 
-  if (!post || post.UserID === likerId) return;
+    if (!post || post.UserID === likerId) return;
 
-  const recipient = await prisma.user.findUnique({
-    where: { UserID: post.UserID },
-    select: { NotificationPreferences: true },
-  });
+    const recipient = await prisma.user.findUnique({
+      where: { UserID: post.UserID },
+      select: { NotificationPreferences: true },
+    });
 
-  const shouldNotify =
-    !recipient.NotificationPreferences ||
-    !recipient.NotificationPreferences.NotificationTypes ||
-    recipient.NotificationPreferences.NotificationTypes.includes("LIKE");
+    const shouldNotify =
+      !recipient?.NotificationPreferences?.NotificationTypes ||
+      recipient.NotificationPreferences.NotificationTypes.includes("LIKE");
 
-  if (shouldNotify) {
-    await prisma.notification.create({
-      data: {
-        UserID: post.UserID,
-        SenderID: likerId,
-        Type: "LIKE",
-        Content: `${likerUsername} liked your post`,
-        Metadata: {
+    if (shouldNotify) {
+      await NotificationService.createNotification({
+        userId: post.UserID,
+        senderId: likerId,
+        type: "LIKE",
+        content: `${likerUsername} liked your post`,
+        metadata: {
           postId: parseInt(postId),
           likerId,
           likerUsername,
         },
-      },
-    });
-    logger.info(
-      `Like notification created for post ${postId} by user ${likerId}`
-    );
+      });
+
+      logger.info(
+        `Like notification sent to user ${post.UserID} from ${likerId}`
+      );
+    }
+  } catch (error) {
+    logger.error(`Failed to send like notification: ${error.message}`);
   }
 }
 
@@ -126,33 +130,33 @@ async function createCommentNotification(
   postOwnerId,
   commenterUsername
 ) {
-  const recipient = await prisma.user.findUnique({
-    where: { UserID: postOwnerId },
-    select: { NotificationPreferences: true },
-  });
+  try {
+    if (postOwnerId === commenterId) return;
 
-  const shouldNotify =
-    !recipient.NotificationPreferences ||
-    !recipient.NotificationPreferences.NotificationTypes ||
-    recipient.NotificationPreferences.NotificationTypes.includes("COMMENT");
+    const recipient = await prisma.user.findUnique({
+      where: { UserID: postOwnerId },
+      select: { NotificationPreferences: true },
+    });
 
-  if (shouldNotify) {
-    await prisma.notification.create({
-      data: {
-        UserID: postOwnerId,
-        SenderID: commenterId,
-        Type: "COMMENT",
-        Content: `${commenterUsername} commented on your post`,
-        Metadata: {
+    const shouldNotify =
+      !recipient?.NotificationPreferences?.NotificationTypes ||
+      recipient.NotificationPreferences.NotificationTypes.includes("COMMENT");
+
+    if (shouldNotify) {
+      await NotificationService.createNotification({
+        userId: postOwnerId,
+        senderId: commenterId,
+        type: "COMMENT",
+        content: `${commenterUsername} commented on your post`,
+        metadata: {
           postId: parseInt(postId),
           commenterId,
           commenterUsername,
         },
-      },
-    });
-    logger.info(
-      `Comment notification created for post ${postId} by user ${commenterId}`
-    );
+      });
+    }
+  } catch (error) {
+    logger.error(`Failed to send comment notification: ${error.message}`);
   }
 }
 
@@ -164,43 +168,41 @@ async function createCommentLikeNotification(
   likerId,
   likerUsername
 ) {
-  const comment = await prisma.comment.findUnique({
-    where: { CommentID: parseInt(commentId) },
-    select: { UserID: true, PostID: true },
-  });
+  try {
+    const comment = await prisma.comment.findUnique({
+      where: { CommentID: parseInt(commentId) },
+      select: { UserID: true, PostID: true },
+    });
 
-  if (!comment || comment.UserID === likerId) return;
+    if (!comment || comment.UserID === likerId) return;
 
-  const recipient = await prisma.user.findUnique({
-    where: { UserID: comment.UserID },
-    select: { NotificationPreferences: true },
-  });
+    const recipient = await prisma.user.findUnique({
+      where: { UserID: comment.UserID },
+      select: { NotificationPreferences: true },
+    });
 
-  const shouldNotify =
-    !recipient.NotificationPreferences ||
-    !recipient.NotificationPreferences.NotificationTypes ||
-    recipient.NotificationPreferences.NotificationTypes.includes(
-      "COMMENT_LIKE"
-    );
+    const shouldNotify =
+      !recipient?.NotificationPreferences?.NotificationTypes ||
+      recipient.NotificationPreferences.NotificationTypes.includes(
+        "COMMENT_LIKE"
+      );
 
-  if (shouldNotify) {
-    await prisma.notification.create({
-      data: {
-        UserID: comment.UserID,
-        SenderID: likerId,
-        Type: "COMMENT_LIKE",
-        Content: `${likerUsername} liked your comment`,
-        Metadata: {
+    if (shouldNotify) {
+      await NotificationService.createNotification({
+        userId: comment.UserID,
+        senderId: likerId,
+        type: "COMMENT_LIKE",
+        content: `${likerUsername} liked your comment`,
+        metadata: {
           commentId: parseInt(commentId),
           postId: comment.PostID,
           likerId,
           likerUsername,
         },
-      },
-    });
-    logger.info(
-      `Comment like notification created for comment ${commentId} by user ${likerId}`
-    );
+      });
+    }
+  } catch (error) {
+    logger.error(`Failed to send comment like notification: ${error.message}`);
   }
 }
 
@@ -213,43 +215,41 @@ async function createCommentReplyNotification(
   commentOwnerId,
   replierUsername
 ) {
-  const comment = await prisma.comment.findUnique({
-    where: { CommentID: parseInt(commentId) },
-    select: { PostID: true },
-  });
+  try {
+    if (commentOwnerId === replierId) return;
 
-  if (!comment || commentOwnerId === replierId) return;
+    const comment = await prisma.comment.findUnique({
+      where: { CommentID: parseInt(commentId) },
+      select: { PostID: true },
+    });
 
-  const recipient = await prisma.user.findUnique({
-    where: { UserID: commentOwnerId },
-    select: { NotificationPreferences: true },
-  });
+    const recipient = await prisma.user.findUnique({
+      where: { UserID: commentOwnerId },
+      select: { NotificationPreferences: true },
+    });
 
-  const shouldNotify =
-    !recipient.NotificationPreferences ||
-    !recipient.NotificationPreferences.NotificationTypes ||
-    recipient.NotificationPreferences.NotificationTypes.includes(
-      "COMMENT_REPLY"
-    );
+    const shouldNotify =
+      !recipient?.NotificationPreferences?.NotificationTypes ||
+      recipient.NotificationPreferences.NotificationTypes.includes(
+        "COMMENT_REPLY"
+      );
 
-  if (shouldNotify) {
-    await prisma.notification.create({
-      data: {
-        UserID: commentOwnerId,
-        SenderID: replierId,
-        Type: "COMMENT_REPLY",
-        Content: `${replierUsername} replied to your comment`,
-        Metadata: {
+    if (shouldNotify) {
+      await NotificationService.createNotification({
+        userId: commentOwnerId,
+        senderId: replierId,
+        type: "COMMENT_REPLY",
+        content: `${replierUsername} replied to your comment`,
+        metadata: {
           commentId: parseInt(commentId),
           postId: comment.PostID,
           replierId,
           replierUsername,
         },
-      },
-    });
-    logger.info(
-      `Comment reply notification created for comment ${commentId} by user ${replierId}`
-    );
+      });
+    }
+  } catch (error) {
+    logger.error(`Failed to send reply notification: ${error.message}`);
   }
 }
 
@@ -262,33 +262,33 @@ async function createShareNotification(
   originalOwnerId,
   sharerUsername
 ) {
-  const recipient = await prisma.user.findUnique({
-    where: { UserID: originalOwnerId },
-    select: { NotificationPreferences: true },
-  });
+  try {
+    if (originalOwnerId === sharerId) return;
 
-  const shouldNotify =
-    !recipient.NotificationPreferences ||
-    !recipient.NotificationPreferences.NotificationTypes ||
-    recipient.NotificationPreferences.NotificationTypes.includes("SHARE");
+    const recipient = await prisma.user.findUnique({
+      where: { UserID: originalOwnerId },
+      select: { NotificationPreferences: true },
+    });
 
-  if (shouldNotify) {
-    await prisma.notification.create({
-      data: {
-        UserID: originalOwnerId,
-        SenderID: sharerId,
-        Type: "SHARE",
-        Content: `${sharerUsername} shared your post`,
-        Metadata: {
+    const shouldNotify =
+      !recipient?.NotificationPreferences?.NotificationTypes ||
+      recipient.NotificationPreferences.NotificationTypes.includes("SHARE");
+
+    if (shouldNotify) {
+      await NotificationService.createNotification({
+        userId: originalOwnerId,
+        senderId: sharerId,
+        type: "SHARE",
+        content: `${sharerUsername} shared your post`,
+        metadata: {
           originalPostId: parseInt(originalPostId),
           sharerId,
           sharerUsername,
         },
-      },
-    });
-    logger.info(
-      `Share notification created for post ${originalPostId} by user ${sharerId}`
-    );
+      });
+    }
+  } catch (error) {
+    logger.error(`Failed to send share notification: ${error.message}`);
   }
 }
 
@@ -301,39 +301,36 @@ async function notifyAdminsAboutReport(
   reason,
   reporterUsername
 ) {
-  const admins = await prisma.user.findMany({
-    where: { Role: "ADMIN" },
-    select: { UserID: true, NotificationPreferences: true },
-  });
+  try {
+    const admins = await prisma.user.findMany({
+      where: { Role: "ADMIN" },
+      select: { UserID: true },
+    });
 
-  await Promise.all(
-    admins.map((admin) => {
-      const shouldNotify =
-        !admin.NotificationPreferences ||
-        !admin.NotificationPreferences.NotificationTypes ||
-        admin.NotificationPreferences.NotificationTypes.includes("REPORT");
-
-      if (shouldNotify) {
-        return prisma.notification.create({
-          data: {
-            UserID: admin.UserID,
-            SenderID: reporterId,
-            Type: "REPORT",
-            Content: `${reporterUsername} reported a post: ${reason}`,
-            Metadata: {
-              postId,
-              reporterId,
-              reason,
-              reporterUsername,
-            },
+    await Promise.all(
+      admins.map((admin) =>
+        NotificationService.createNotification({
+          userId: admin.UserID,
+          senderId: reporterId,
+          type: "REPORT",
+          content: `${reporterUsername} reported a post: ${reason.substring(
+            0,
+            50
+          )}${reason.length > 50 ? "..." : ""}`,
+          metadata: {
+            postId,
+            reporterId,
+            reason,
+            reporterUsername,
           },
-        });
-      }
-    })
-  );
-  logger.info(
-    `Admins notified about report on post ${postId} by user ${reporterId}`
-  );
+        })
+      )
+    );
+
+    logger.info(`All admins notified about report on post ${postId}`);
+  } catch (error) {
+    logger.error(`Failed to notify admins about report: ${error.message}`);
+  }
 }
 
 /**
@@ -441,7 +438,6 @@ const createPost = async (req, res) => {
     });
   }
 };
-
 
 /**
  * Optimized getPosts function
@@ -624,7 +620,13 @@ const getPosts = async (req, res) => {
               orderBy: { CreatedAt: "desc" },
               take: 3,
               include: {
-                User: { select: { Username: true, ProfilePicture: true, UserID: true } }, // Added UserID for filtering
+                User: {
+                  select: {
+                    Username: true,
+                    ProfilePicture: true,
+                    UserID: true,
+                  },
+                }, // Added UserID for filtering
               },
             },
             Replies: {
@@ -642,7 +644,13 @@ const getPosts = async (req, res) => {
                   orderBy: { CreatedAt: "asc" },
                   take: 3,
                   include: {
-                    User: { select: { Username: true, ProfilePicture: true, UserID: true } }, // Added UserID for filtering
+                    User: {
+                      select: {
+                        Username: true,
+                        ProfilePicture: true,
+                        UserID: true,
+                      },
+                    }, // Added UserID for filtering
                   },
                 },
                 _count: { select: { CommentLikes: true } },
@@ -710,12 +718,12 @@ const getPosts = async (req, res) => {
         isLiked: comment.CommentLikes.some((l) => l.UserID === userId),
         likeCount: comment._count.CommentLikes,
         replyCount: comment._count.Replies,
-        likedBy: comment.CommentLikes
-          .filter((l) => l.UserID === userId || followingIds.includes(l.UserID))
-          .map((l) => ({
-            username: l.User.Username,
-            profilePicture: l.User.ProfilePicture,
-          })),
+        likedBy: comment.CommentLikes.filter(
+          (l) => l.UserID === userId || followingIds.includes(l.UserID)
+        ).map((l) => ({
+          username: l.User.Username,
+          profilePicture: l.User.ProfilePicture,
+        })),
         Replies: comment.Replies.map((reply) => ({
           CommentID: reply.CommentID,
           Content: reply.Content,
@@ -724,12 +732,12 @@ const getPosts = async (req, res) => {
           isMine: reply.UserID === userId,
           isLiked: reply.CommentLikes.some((l) => l.UserID === userId),
           likeCount: reply._count.CommentLikes,
-          likedBy: reply.CommentLikes
-            .filter((l) => l.UserID === userId || followingIds.includes(l.UserID))
-            .map((l) => ({
-              username: l.User.Username,
-              profilePicture: l.User.ProfilePicture,
-            })),
+          likedBy: reply.CommentLikes.filter(
+            (l) => l.UserID === userId || followingIds.includes(l.UserID)
+          ).map((l) => ({
+            username: l.User.Username,
+            profilePicture: l.User.ProfilePicture,
+          })),
         })),
       }));
 
@@ -955,12 +963,12 @@ const getExplorePosts = async (req, res) => {
     const formatted = posts.map((post) => {
       const isLiked = userLikes.some((l) => l.PostID === post.PostID);
       const isSaved = userSaves.some((s) => s.PostID === post.PostID);
-      const isUnseen = !viewedIds.includes(post.PostID);; // All posts are unseen due to where clause
+      const isUnseen = !viewedIds.includes(post.PostID); // All posts are unseen due to where clause
       const isFollowed = followingIds.includes(post.User.UserID);
 
       // === Likes ===
       const likes = likesByPost[post.PostID] || [];
-      
+
       const myLike = likes.find((l) => l.User.UserID === userId);
       const followingLikes = likes.filter(
         (l) => followingIds.includes(l.User.UserID) && l.User.UserID !== userId
@@ -1139,7 +1147,7 @@ const getFlicks = async (req, res) => {
     });
 
     // Filter posts based on privacy
-    const filteredPosts = posts.filter(p => {
+    const filteredPosts = posts.filter((p) => {
       if (p.privacy === "PUBLIC") return true;
 
       if (p.privacy === "FOLLOWERS_ONLY") {
@@ -1516,8 +1524,8 @@ const getPostById = async (req, res) => {
     );
 
     const sortedLikes = [
-      ...(myLike ? [myLike] : []),
-      ...followingLikes.slice(0, myLike ? 9 : 10),
+      ...(myLike && myLike.User ? [myLike] : []),
+      ...followingLikes.filter((l) => l.User).slice(0, myLike ? 9 : 10),
     ].map((like) => ({
       userId: like.User.UserID,
       username: like.User.Username,
@@ -1526,7 +1534,6 @@ const getPostById = async (req, res) => {
       isFollowed: followingIds.has(like.User.UserID),
       likedAt: like.CreatedAt.toISOString(),
     }));
-
 
     // Sort comments by priority: viewer → following → others
     const sortedComments = comments
@@ -1573,7 +1580,6 @@ const getPostById = async (req, res) => {
         })),
       })),
     }));
-    
 
     const response = {
       post: {
@@ -1584,14 +1590,7 @@ const getPostById = async (req, res) => {
         likeCount: post._count.Likes,
         commentCount: post._count.Comments,
         shareCount: post._count.Shares,
-        Likes: sortedLikes.map((like) => ({
-          userId: like.User.UserID,
-          username: like.User.Username,
-          profileName: like.User.ProfileName,
-          profilePicture: like.User.ProfilePicture,
-          isFollowed: followingIds.has(like.User.UserID),
-          likedAt: like.CreatedAt,
-        })),
+        Likes: sortedLikes,
         Comments: formattedComments,
         SharedPost: post.SharedPost
           ? {
