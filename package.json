@@ -51,5 +51,8 @@
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10"
   }
 }
