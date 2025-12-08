@@ -1,5 +1,4 @@
 const prisma = require("../utils/prisma");
-const { setWithTracking, get, clearUserCache } = require("../utils/redisUtils");
 const logger = require("../utils/logger");
 const { handleServerError } = require("../utils/errorHandler");
 const emailService = require("./emailService");
@@ -13,13 +12,6 @@ function setSocketInstance(socketIo) {
 
 /**
  * Creates a notification for a user and sends it via appropriate channels
- * @param {Object} params - Notification parameters
- * @param {number} params.userId - The ID of the user to notify
- * @param {string} params.type - Notification type (e.g., LIKE, COMMENT)
- * @param {string} params.content - Notification content
- * @param {Object} [params.metadata] - Additional metadata
- * @param {number} [params.senderId] - The ID of the sender (optional)
- * @returns {Promise<Object>} Created notification
  */
 async function createNotification({
   userId,
@@ -35,51 +27,71 @@ async function createNotification({
         UserID: userId,
         Type: type,
         Content: content,
-        Metadata: metadata,
+        Metadata: metadata || {},
         SenderID: senderId,
+      },
+      include: {
+        Sender: {
+          select: {
+            UserID: true,
+            Username: true,
+            ProfilePicture: true,
+          },
+        },
       },
     });
 
-    // Increment unread notifications count in Redis
-    const cacheKey = `unread_notifications_count:${userId}`;
-    await setWithTracking(
-      cacheKey,
-      (await getUnreadNotificationsCount(userId)) + 1,
-      300,
-      userId
-    );
-    logger.info(`Incremented unread notifications count for user ${userId}`);
+    logger.info(`Notification created for user ${userId} - Type: ${type}`);
 
-    // Send email notification if enabled
+    // Format notification exactly like getNotifications response
+    const formattedNotification = {
+      notification: {
+        notificationId: notification.NotificationID,
+        type: notification.Type,
+        content: notification.Content,
+        isRead: notification.IsRead,
+        createdAt: notification.CreatedAt,
+        sender: notification.Sender
+          ? {
+              userId: notification.Sender.UserID,
+              username: notification.Sender.Username,
+              profilePicture: notification.Sender.ProfilePicture,
+            }
+          : null,
+        metadata: notification.Metadata,
+      },
+    };
+
+    // 1. Send email if enabled
     const user = await prisma.user.findUnique({
       where: { UserID: userId },
-      select: { NotificationPreferences: true },
+      select: { NotificationPreferences: true, Email: true },
     });
 
     if (user?.NotificationPreferences?.EmailNotifications) {
       try {
         await emailService.sendNotificationEmail({
           userId,
+          email: user.Email,
           type,
           content,
         });
-        logger.info(`Email notification sent to user ${userId}`);
       } catch (error) {
-        logger.error(
-          `Failed to send email notification to user ${userId}: ${error.message}`
-        );
+        logger.error(`Failed to send email notification: ${error.message}`);
       }
     }
 
-    // Emit updated unread notifications count via Socket.IO if user is online
+    // 2. Emit REAL-TIME notification to the user
     if (io) {
+      io.to(`user:${userId}`).emit("notification:new", formattedNotification);
+
+      // 3. Also emit updated unread count
       const unreadCount = await getUnreadNotificationsCount(userId);
-      io.to(`user_${userId}`).emit("unreadNotificationsCount", {
+      io.to(`user:${userId}`).emit("unreadNotificationsCount", {
         count: unreadCount,
       });
-      logger.info(
-        `Sent updated unread notifications count to user ${userId}: ${unreadCount}`
-      );
+
+      logger.info(`Real-time notification + count sent to user:${userId}`);
     }
 
     return notification;
@@ -93,12 +105,6 @@ async function createNotification({
 
 /**
  * Gets notifications for a user with pagination
- * @param {Object} params - Query parameters
- * @param {number} params.userId - The ID of the user
- * @param {number} [params.page=1] - Page number
- * @param {number} [params.limit=20] - Number of notifications per page
- * @param {string} [params.readStatus="ALL"] - Filter by read status (ALL, READ, UNREAD)
- * @returns {Promise<Object>} Notifications and pagination info
  */
 async function getNotifications({
   userId,
@@ -107,17 +113,8 @@ async function getNotifications({
   readStatus = "ALL",
 }) {
   try {
-    const cacheKey = `notifications:${userId}:${page}:${limit}:${readStatus}`;
-    const cachedNotifications = await get(cacheKey);
-    if (cachedNotifications) {
-      logger.info(`Retrieved notifications from cache for user ${userId}`);
-      return cachedNotifications;
-    }
-
     const skip = (page - 1) * limit;
-    const where = {
-      UserID: userId,
-    };
+    const where = { UserID: userId };
 
     if (readStatus === "READ") {
       where.IsRead = true;
@@ -165,9 +162,6 @@ async function getNotifications({
       currentPage: page,
     };
 
-    await setWithTracking(cacheKey, response, 300, userId);
-    logger.info(`Cached notifications for user ${userId}`);
-
     return response;
   } catch (error) {
     logger.error(
@@ -179,9 +173,6 @@ async function getNotifications({
 
 /**
  * Marks notifications as read
- * @param {number} userId - The ID of the user
- * @param {number[]} notificationIds - Array of notification IDs to mark as read
- * @returns {Promise<void>}
  */
 async function markNotificationsRead(userId, notificationIds) {
   try {
@@ -202,25 +193,13 @@ async function markNotificationsRead(userId, notificationIds) {
         NotificationID: { in: notificationIds },
         UserID: userId,
       },
-      data: {
-        IsRead: true,
-      },
+      data: { IsRead: true },
     });
 
-    // Update unread notifications count in Redis
-    const cacheKey = `unread_notifications_count:${userId}`;
-    const newCount = await getUnreadNotificationsCount(userId);
-    await setWithTracking(cacheKey, newCount, 300, userId);
-    logger.info(
-      `Updated unread notifications count for user ${userId}: ${newCount}`
-    );
-
-    // Clear notifications cache
-    await clearUserCache(userId);
-
-    // Emit updated unread notifications count via Socket.IO
+    // Emit updated count via Socket.IO
     if (io) {
-      io.to(`user_${userId}`).emit("unreadNotificationsCount", {
+      const newCount = await getUnreadNotificationsCount(userId);
+      io.to(`user:${userId}`).emit("unreadNotificationsCount", {
         count: newCount,
       });
       logger.info(
@@ -237,8 +216,6 @@ async function markNotificationsRead(userId, notificationIds) {
 
 /**
  * Marks all notifications as read for a user
- * @param {number} userId - The ID of the user
- * @returns {Promise<void>}
  */
 async function markAllNotificationsRead(userId) {
   try {
@@ -247,29 +224,16 @@ async function markAllNotificationsRead(userId) {
         UserID: userId,
         IsRead: false,
       },
-      data: {
-        IsRead: true,
-      },
+      data: { IsRead: true },
     });
 
-    // Update unread notifications count in Redis
-    const cacheKey = `unread_notifications_count:${userId}`;
-    const newCount = await getUnreadNotificationsCount(userId);
-    await setWithTracking(cacheKey, newCount, 300, userId);
-    logger.info(
-      `Updated unread notifications count for user ${userId}: ${newCount}`
-    );
-
-    // Clear notifications cache
-    await clearUserCache(userId);
-
-    // Emit updated unread notifications count via Socket.IO
     if (io) {
-      io.to(`user_${userId}`).emit("unreadNotificationsCount", {
+      const newCount = await getUnreadNotificationsCount(userId);
+      io.to(`user:${userId}`).emit("unreadNotificationsCount", {
         count: newCount,
       });
       logger.info(
-        `Sent updated unread notifications count to user ${userId}: ${newCount}`
+        `Sent updated unread notifications count (all read) to user ${userId}: ${newCount}`
       );
     }
   } catch (error) {
@@ -282,9 +246,6 @@ async function markAllNotificationsRead(userId) {
 
 /**
  * Deletes a notification
- * @param {number} userId - The ID of the user
- * @param {number} notificationId - The ID of the notification to delete
- * @returns {Promise<void>}
  */
 async function deleteNotification(userId, notificationId) {
   try {
@@ -301,28 +262,16 @@ async function deleteNotification(userId, notificationId) {
       where: { NotificationID: notificationId },
     });
 
-    // Update unread notifications count in Redis if the notification was unread
-    if (!notification.IsRead) {
-      const cacheKey = `unread_notifications_count:${userId}`;
+    // If the deleted notification was unread → update count
+    if (!notification.IsRead && io) {
       const newCount = await getUnreadNotificationsCount(userId);
-      await setWithTracking(cacheKey, newCount, 300, userId);
+      io.to(`user:${userId}`).emit("unreadNotificationsCount", {
+        count: newCount,
+      });
       logger.info(
-        `Updated unread notifications count for user ${userId}: ${newCount}`
+        `Sent updated unread count after deletion to user ${userId}: ${newCount}`
       );
-
-      // Emit updated unread notifications count via Socket.IO
-      if (io) {
-        io.to(`user_${userId}`).emit("unreadNotificationsCount", {
-          count: newCount,
-        });
-        logger.info(
-          `Sent updated unread notifications count to user ${userId}: ${newCount}`
-        );
-      }
     }
-
-    // Clear notifications cache
-    await clearUserCache(userId);
   } catch (error) {
     logger.error(
       `Error deleting notification ${notificationId} for user ${userId}: ${error.message}`
@@ -333,9 +282,6 @@ async function deleteNotification(userId, notificationId) {
 
 /**
  * Updates a user's notification preferences
- * @param {number} userId - The ID of the user
- * @param {Object} preferences - Notification preferences
- * @returns {Promise<Object>} Updated preferences
  */
 async function updateNotificationPreferences(userId, preferences) {
   try {
@@ -349,9 +295,7 @@ async function updateNotificationPreferences(userId, preferences) {
           },
         },
       },
-      select: {
-        NotificationPreferences: true,
-      },
+      select: { NotificationPreferences: true },
     });
 
     logger.info(`Updated notification preferences for user ${userId}`);
@@ -365,23 +309,10 @@ async function updateNotificationPreferences(userId, preferences) {
 }
 
 /**
- * Gets the count of unread notifications for a user
- * @param {number} userId - The ID of the user
- * @returns {Promise<number>} The count of unread notifications
+ * Gets the count of unread notifications for a user (directly from DB - no cache)
  */
 async function getUnreadNotificationsCount(userId) {
   try {
-    // Check Redis cache first
-    const cacheKey = `unread_notifications_count:${userId}`;
-    const cachedCount = await get(cacheKey);
-    if (cachedCount !== null) {
-      logger.info(
-        `Retrieved unread notifications count from cache for user ${userId}: ${cachedCount}`
-      );
-      return parseInt(cachedCount);
-    }
-
-    // Query Prisma for unread notifications count
     const count = await prisma.notification.count({
       where: {
         UserID: userId,
@@ -389,16 +320,83 @@ async function getUnreadNotificationsCount(userId) {
       },
     });
 
-    // Cache the result in Redis for 5 minutes
-    await setWithTracking(cacheKey, count, 300, userId);
     logger.info(
-      `Fetched and cached unread notifications count for user ${userId}: ${count}`
+      `Fetched unread notifications count for user ${userId}: ${count}`
     );
-
     return count;
   } catch (error) {
     logger.error(
       `Error fetching unread notifications count for user ${userId}: ${error.message}`
+    );
+    throw error;
+  }
+}
+
+/**
+ * Deletes all old FOLLOW_REQUEST notifications for a given user.
+ */
+async function deleteOldFollowRequests(userId) {
+  try {
+    await prisma.notification.deleteMany({
+      where: {
+        UserID: userId,
+        Type: "FOLLOW_REQUEST",
+      },
+    });
+
+    logger.info(`Deleted old FOLLOW_REQUEST notifications for user ${userId}`);
+  } catch (error) {
+    logger.error(`Failed to delete old follow requests: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Deletes notifications by IDs and emits real-time updates to the user
+ * @param {number} userId - ID of the user who owns the notifications
+ * @param {number[]} notificationIds - Array of notification IDs to delete
+ */
+async function deleteNotificationsAndEmit(userId, notificationIds) {
+  try {
+    if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
+      return [];
+    }
+
+    // Delete notifications safely
+    const deleted = await prisma.notification.deleteMany({
+      where: {
+        UserID: userId,
+        NotificationID: { in: notificationIds },
+      },
+    });
+
+    logger.info(
+      `Deleted ${
+        deleted.count
+      } notifications for user ${userId}: [${notificationIds.join(", ")}]`
+    );
+
+    // Emit deleted notification IDs to frontend
+    if (io && deleted.count > 0) {
+      io.to(`user:${userId}`).emit("notification:deleted", {
+        notificationIds,
+      });
+
+      // Update unread count after deletion
+      const newCount = await getUnreadNotificationsCount(userId);
+      io.to(`user:${userId}`).emit("unreadNotificationsCount", {
+        count: newCount,
+      });
+
+      logger.info(
+        `Emitted deleted notification IDs + updated unread count for user ${userId}`
+      );
+    }
+
+    return notificationIds;
+  } catch (error) {
+    logger.error(
+      `Error deleting notifications for user ${userId}: ${error.message}`
     );
     throw error;
   }
@@ -413,4 +411,6 @@ module.exports = {
   deleteNotification,
   updateNotificationPreferences,
   getUnreadNotificationsCount,
+  deleteOldFollowRequests,
+  deleteNotificationsAndEmit,
 };

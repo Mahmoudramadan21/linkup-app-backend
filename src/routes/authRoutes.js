@@ -23,10 +23,6 @@ const {
 } = require("../validators/authValidators");
 const { validate } = require("../middleware/validationMiddleware");
 const { authMiddleware } = require("../middleware/authMiddleware");
-const {
-  csrfProtection,
-  setCsrfCookie,
-} = require("../middleware/csrfMiddleware");
 const rateLimit = require("express-rate-limit");
 
 const router = express.Router();
@@ -303,7 +299,7 @@ const forgotPasswordLimiter = rateLimit({
  *             example:
  *               message: Error registering user
  */
-router.post("/signup", csrfProtection, signupValidationRules, validate, signup);
+router.post("/signup", signupValidationRules, validate, signup);
 
 /**
  * @swagger
@@ -404,7 +400,6 @@ router.post("/signup", csrfProtection, signupValidationRules, validate, signup);
 router.post(
   "/login",
   loginLimiter,
-  csrfProtection,
   loginValidationRules,
   validate,
   login
@@ -474,7 +469,7 @@ router.post(
  *             example:
  *               message: Redis service unavailable
  */
-router.post("/refresh", csrfProtection, controllerRefreshToken);
+router.post("/refresh", controllerRefreshToken);
 
 /**
  * @swagger
@@ -525,7 +520,7 @@ router.post("/refresh", csrfProtection, controllerRefreshToken);
  *             example:
  *               message: Failed to logout
  */
-router.post("/logout", authMiddleware, csrfProtection, logout);
+router.post("/logout", authMiddleware, logout);
 
 /**
  * @swagger
@@ -672,7 +667,6 @@ router.get("/isAuthenticated", isAuthenticated);
 router.post(
   "/forgot-password",
   forgotPasswordLimiter,
-  csrfProtection,
   forgotPasswordValidationRules,
   validate,
   forgotPassword
@@ -729,7 +723,6 @@ router.post(
  */
 router.post(
   "/verify-code",
-  csrfProtection,
   verifyCodeValidationRules,
   validate,
   verifyCode
@@ -793,7 +786,6 @@ router.post(
  */
 router.post(
   "/reset-password",
-  csrfProtection,
   resetPasswordValidationRules,
   validate,
   resetPassword
@@ -831,9 +823,9 @@ router.post(
  *             example:
  *               message: Failed to generate CSRF token
  */
-router.get("/csrf-token", csrfProtection, setCsrfCookie, (req, res) => {
-  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
-  res.status(200).json({ message: "CSRF token generated successfully" });
-});
+// router.get("/csrf-token", csrfProtection, setCsrfCookie, (req, res) => {
+//   res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+//   res.status(200).json({ message: "CSRF token generated successfully" });
+// });
 
 module.exports = router;
