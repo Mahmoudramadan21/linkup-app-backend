@@ -6,6 +6,7 @@ const { createServer } = require("http");
 const { Server } = require("socket.io");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
+const prisma = require("./utils/prisma.js");
 
 const routes = require("./routes/index.js");
 const setupSwagger = require("./docs/swagger.js");
@@ -13,6 +14,8 @@ const { startRedisCleanup } = require("./utils/redisCleanup");
 const { get, set, del } = require("./utils/redisUtils");
 const app = express();
 const httpServer = createServer(app);
+
+const NotificationService = require("./services/notificationService");
 
 // =============================
 // Middleware
@@ -40,16 +43,14 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: allowedOrigins,
     credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+    exposedHeaders: ["set-cookie"],
   })
 );
+
+app.set("trust proxy", 1);
 
 // =============================
 // Swagger
@@ -191,6 +192,7 @@ io.on("connection", (socket) => {
 
 // Make io accessible in controllers
 app.set("io", io);
+NotificationService.setSocketInstance(io);
 
 // =============================
 // Background Jobs

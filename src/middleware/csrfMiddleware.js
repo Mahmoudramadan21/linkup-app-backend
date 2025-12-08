@@ -19,26 +19,31 @@ const csrfProtection = csurf({
   },
 });
 
-// Middleware to set a non-HttpOnly CSRF token cookie for frontend access
+// Middleware to set a CSRF token cookie for frontend access
 const setCsrfCookie = (req, res, next) => {
   if (!req.csrfToken) {
     console.error("CSRF token function not available");
     return res.status(500).json({ error: "CSRF token generation failed" });
   }
+
   const token = req.csrfToken();
   if (!token) {
     console.error("CSRF token not generated");
     return res.status(500).json({ error: "CSRF token generation failed" });
   }
+
   console.log("Setting csrf-token cookie with value:", token);
+
   res.cookie("csrf-token", token, {
-    httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "Strict",
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
     path: "/",
   });
+
   console.log("csrf-token cookie set successfully");
   next();
 };
+
 
 module.exports = { csrfProtection, setCsrfCookie };
