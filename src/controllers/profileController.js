@@ -601,6 +601,16 @@ const updateProfile = async (req, res) => {
       }
     }
 
+    // Detect privacy change (public -> private)
+    const becomingPrivate = wasPrivate === false && parsedIsPrivate === true;
+
+    if (becomingPrivate) {
+      await prisma.post.updateMany({
+        where: { UserID: userId },
+        data: { privacy: "FOLLOWERS_ONLY" },
+      });
+    }
+
     // Respond with the updated profile
     res.status(200).json({
       message: "Profile updated successfully",
