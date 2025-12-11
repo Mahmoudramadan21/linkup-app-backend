@@ -29,9 +29,9 @@ const router = express.Router();
 
 // Rate limiter for login endpoint
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit to 5 attempts
-  message: "Too many login attempts, please try again after 15 minutes",
+  windowMs: 5 * 60 * 1000, // 15 minutes
+  max: 15, // Limit to 5 attempts
+  message: "Too many login attempts, please try again after 5 minutes",
 });
 
 // Rate limiter for forgot-password endpoint

@@ -206,12 +206,12 @@ const forgotPassword = async (req, res) => {
       const verificationCode = Math.floor(
         1000 + Math.random() * 9000
       ).toString();
-      const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiry
+      const ResetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiry
 
       // Store the code in resetToken field
       await prisma.user.update({
         where: { UserID: user.UserID },
-        data: { resetToken: verificationCode, resetTokenExpiry },
+        data: { ResetToken: verificationCode, ResetTokenExpiry },
       });
 
       // Send the verification code via email
@@ -241,8 +241,8 @@ const verifyCode = async (req, res) => {
     const user = await prisma.user.findFirst({
       where: {
         Email: email,
-        resetToken: code,
-        resetTokenExpiry: { gt: new Date() },
+        ResetToken: code,
+        ResetTokenExpiry: { gt: new Date() },
       },
     });
 
@@ -272,7 +272,7 @@ const verifyCode = async (req, res) => {
     // Clear the verification code
     await prisma.user.update({
       where: { UserID: user.UserID },
-      data: { resetToken: null, resetTokenExpiry: null },
+      data: { ResetToken: null, ResetTokenExpiry: null },
     });
 
     res.status(200).json({
@@ -355,10 +355,17 @@ const logout = async (req, res) => {
     const accessToken = req.cookies.accessToken; // Get accessToken from cookies
     await serviceLogout(userId, accessToken);
 
+    const cookieOptions = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: "/",
+    };
+
     // Clear all cookies
-    res.clearCookie("accessToken", { path: "/" });
-    res.clearCookie("refreshToken", { path: "/" });
-    res.clearCookie("resetToken", { path: "/" }); // Clear resetToken if exists
+    res.clearCookie("accessToken", cookieOptions);
+    res.clearCookie("refreshToken", cookieOptions);
+    res.clearCookie("resetToken", cookieOptions);
 
     res.json({ message: "Logout successful" });
   } catch (error) {
