@@ -805,11 +805,9 @@ const getPosts = async (req, res) => {
 
 /**
  * Get Explore posts (posts with images or videos from non-followed users, similar to Instagram Explore)
- * - Fetches public posts with images or videos that are unseen by the user
- * - Uses batch queries to avoid N+1 problem
- * - Caches results with Redis
- * - Supports pagination
- * - Only includes public posts from non-followed users
+ * - First: Unseen public posts from non-followed users
+ * - If none: Falls back to seen public posts from non-followed users (loop behavior)
+ * - Uses batch queries, Redis cache, pagination, and respects privacy
  */
 const getExplorePosts = async (req, res) => {
   try {
@@ -817,15 +815,15 @@ const getExplorePosts = async (req, res) => {
     const offset = (page - 1) * limit;
     const userId = req.user.UserID;
 
-    // Fetch the last view timestamp for cache key
+    // Cache key depends on last view time
     const lastView = await prisma.postView.findFirst({
       where: { UserID: userId },
       orderBy: { ViewedAt: "desc" },
       select: { ViewedAt: true },
     });
     const viewTimestamp = lastView?.ViewedAt?.getTime() || "0";
-
     const cacheKey = `explore:${userId}:${page}:${limit}:${viewTimestamp}`;
+
     const cached = await redis.get(cacheKey);
     if (cached) {
       try {
@@ -835,33 +833,36 @@ const getExplorePosts = async (req, res) => {
       }
     }
 
-    // === Fetch non-followed users ===
+    // === Followed users (to exclude them) ===
     const following = await prisma.follower.findMany({
       where: { FollowerUserID: userId, Status: "ACCEPTED" },
       select: { UserID: true },
     });
     const followingIds = following.map((f) => f.UserID);
 
-    // === Fetch unseen posts ===
+    // === Viewed posts by user ===
     const viewedPostIds = await prisma.postView.findMany({
       where: { UserID: userId },
       select: { PostID: true },
     });
-    const viewedIds = viewedPostIds.map((v) => v.PostID);
+    const viewedIds = new Set(viewedPostIds.map((v) => v.PostID)); // Use Set for faster lookup
 
-    // === Posts ===
-    const posts = await prisma.post.findMany({
+    let posts = [];
+    let isUnseen = true;
+
+    // === First Attempt: Unseen public posts from non-followed users ===
+    posts = await prisma.post.findMany({
       skip: offset,
-      take: parseInt(limit) * 2, // Fetch extra for filtering
+      take: parseInt(limit) * 3, // Take more to ensure we have enough after filtering
       where: {
         OR: [
-          { ImageURL: { not: null } }, // Posts with images
-          { VideoURL: { not: null } }, // Posts with videos
+          { ImageURL: { not: null } },
+          { VideoURL: { not: null } },
         ],
-        privacy: "PUBLIC", // Only public posts
-        UserID: { notIn: followingIds }, // Exclude followed users
-        PostID: { notIn: viewedIds }, // Exclude viewed posts
-        CreatedAt: { gte: new Date(Date.now() - 700 * 24 * 60 * 60 * 1000) }, // Last 120 days
+        privacy: "PUBLIC",
+        UserID: { notIn: [...followingIds, userId], },
+        PostID: { notIn: Array.from(viewedIds) }, // Unseen
+        CreatedAt: { gte: new Date(Date.now() - 700 * 24 * 60 * 60 * 1000) }, // Last ~2 years
       },
       orderBy: { CreatedAt: "desc" },
       include: {
@@ -884,15 +885,54 @@ const getExplorePosts = async (req, res) => {
       },
     });
 
-    const postIds = posts.map((p) => p.PostID);
+    // === If no unseen posts → fallback to seen ones (loop mode) ===
+    if (posts.length === 0) {
+      isUnseen = false;
 
-    if (!postIds.length) {
+      posts = await prisma.post.findMany({
+        skip: offset,
+        take: parseInt(limit) * 3,
+        where: {
+          OR: [
+            { ImageURL: { not: null } },
+            { VideoURL: { not: null } },
+          ],
+          privacy: "PUBLIC",
+          UserID: { notIn: [...followingIds, userId], },
+          // Remove notIn: viewedIds → allow seen posts
+          CreatedAt: { gte: new Date(Date.now() - 700 * 24 * 60 * 60 * 1000) },
+        },
+        orderBy: { CreatedAt: "desc" },
+        include: {
+          User: {
+            select: {
+              UserID: true,
+              Username: true,
+              ProfilePicture: true,
+              IsPrivate: true,
+            },
+          },
+          SharedPost: {
+            include: {
+              User: {
+                select: { UserID: true, Username: true, ProfilePicture: true },
+              },
+            },
+          },
+          _count: { select: { Likes: true, Comments: true, Shares: true } },
+        },
+      });
+    }
+
+    if (posts.length === 0) {
       await redis.set(cacheKey, JSON.stringify([]), "EX", POST_CACHE_TTL);
       await addToPostsCacheSet(userId, cacheKey);
       return res.json([]);
     }
 
-    // === Batch Queries ===
+    const postIds = posts.map((p) => p.PostID);
+
+    // === Batch Queries (Likes, Saves, Comments) ===
     const [userLikes, userSaves, allLikes, allComments] = await Promise.all([
       prisma.like.findMany({
         where: { PostID: { in: postIds }, UserID: userId },
@@ -920,33 +960,21 @@ const getExplorePosts = async (req, res) => {
         where: { PostID: { in: postIds }, ParentCommentID: null },
         orderBy: { CreatedAt: "desc" },
         include: {
-          User: {
-            select: { UserID: true, Username: true, ProfilePicture: true },
-          },
+          User: { select: { UserID: true, Username: true, ProfilePicture: true } },
           CommentLikes: {
             orderBy: { CreatedAt: "desc" },
             take: 3,
-            include: {
-              User: { select: { Username: true, ProfilePicture: true } },
-            },
+            include: { User: { select: { Username: true, ProfilePicture: true } } },
           },
           Replies: {
             orderBy: { CreatedAt: "asc" },
             take: 3,
             include: {
-              User: {
-                select: {
-                  UserID: true,
-                  Username: true,
-                  ProfilePicture: true,
-                },
-              },
+              User: { select: { UserID: true, Username: true, ProfilePicture: true } },
               CommentLikes: {
                 orderBy: { CreatedAt: "asc" },
                 take: 3,
-                include: {
-                  User: { select: { Username: true, ProfilePicture: true } },
-                },
+                include: { User: { select: { Username: true, ProfilePicture: true } } },
               },
               _count: { select: { CommentLikes: true } },
             },
@@ -956,19 +984,17 @@ const getExplorePosts = async (req, res) => {
       }),
     ]);
 
-    // === Group Data In Memory ===
+    // Group likes & comments
     const likesByPost = groupBy(allLikes, (l) => l.PostID);
     const commentsByPost = groupBy(allComments, (c) => c.PostID);
 
     const formatted = posts.map((post) => {
       const isLiked = userLikes.some((l) => l.PostID === post.PostID);
       const isSaved = userSaves.some((s) => s.PostID === post.PostID);
-      const isUnseen = !viewedIds.includes(post.PostID); // All posts are unseen due to where clause
       const isFollowed = followingIds.includes(post.User.UserID);
 
-      // === Likes ===
+      // Likes preview logic
       const likes = likesByPost[post.PostID] || [];
-
       const myLike = likes.find((l) => l.User.UserID === userId);
       const followingLikes = likes.filter(
         (l) => followingIds.includes(l.User.UserID) && l.User.UserID !== userId
@@ -986,11 +1012,10 @@ const getExplorePosts = async (req, res) => {
         likedAt: like.CreatedAt.toISOString(),
       }));
 
-      // === Comments ===
+      // Comments with priority sorting
       const comments = (commentsByPost[post.PostID] || []).map((c) => ({
         ...c,
-        priority:
-          c.UserID === userId ? 0 : followingIds.includes(c.UserID) ? 1 : 2,
+        priority: c.UserID === userId ? 0 : followingIds.includes(c.UserID) ? 1 : 2,
       }));
 
       const sortedComments = comments
@@ -1033,7 +1058,7 @@ const getExplorePosts = async (req, res) => {
         isMine: post.User.UserID === userId,
         isLiked,
         isSaved,
-        isUnseen,
+        isUnseen, // true if from first query, false if fallback
         isFollowed,
         shareCount: post._count.Shares,
         likeCount: post._count.Likes,
@@ -1041,24 +1066,20 @@ const getExplorePosts = async (req, res) => {
         Likes,
         Comments,
         SharedPost: post.SharedPost
-          ? {
-              ...post.SharedPost,
-              User: post.SharedPost.User,
-            }
+          ? { ...post.SharedPost, User: post.SharedPost.User }
           : null,
       };
     });
 
-    // Sort by creation date (newest first) with randomization
+    // Shuffle with time-based + random for better exploration feel
     const shuffled = formatted
       .map((post) => ({ ...post, random: Math.random() }))
       .sort((a, b) => {
-        return (
-          b.CreatedAt.getTime() - a.CreatedAt.getTime() || a.random - b.random
-        );
+        return b.CreatedAt.getTime() - a.CreatedAt.getTime() || a.random - b.random;
       })
       .slice(0, parseInt(limit));
 
+    // Cache result
     await redis.set(cacheKey, JSON.stringify(shuffled), "EX", POST_CACHE_TTL);
     await addToPostsCacheSet(userId, cacheKey);
 
@@ -1108,21 +1129,22 @@ const getFlicks = async (req, res) => {
     });
     const followingIds = following.map((f) => f.UserID);
 
-    // === Fetch unseen posts ===
+    // === Fetch viewed posts ===
     const viewedPostIds = await prisma.postView.findMany({
       where: { UserID: userId },
       select: { PostID: true },
     });
     const viewedIds = viewedPostIds.map((v) => v.PostID);
 
-    // === Posts ===
-    const posts = await prisma.post.findMany({
+    // === Fetch unseen posts ===
+    let posts = await prisma.post.findMany({
       skip: offset,
       take: parseInt(limit) * 2, // Fetch extra for filtering
       where: {
+        UserID: { not: userId }, 
         VideoURL: { not: null }, // Only posts with videos
         privacy: { in: ["PUBLIC", "FOLLOWERS_ONLY"] }, // Respect privacy
-        // PostID: { notIn: viewedIds }, // Exclude viewed posts
+        PostID: { notIn: viewedIds }, // Exclude viewed posts
         CreatedAt: { gte: new Date(Date.now() - 730 * 24 * 60 * 60 * 1000) }, // Last 730 days
       },
       orderBy: { CreatedAt: "desc" },
@@ -1147,7 +1169,7 @@ const getFlicks = async (req, res) => {
     });
 
     // Filter posts based on privacy
-    const filteredPosts = posts.filter((p) => {
+    let filteredPosts = posts.filter((p) => {
       if (p.privacy === "PUBLIC") return true;
 
       if (p.privacy === "FOLLOWERS_ONLY") {
@@ -1156,6 +1178,54 @@ const getFlicks = async (req, res) => {
 
       return false;
     });
+
+    let isUnseen = true; // Flag for whether these are unseen posts
+
+    // If no unseen posts, fetch seen posts instead
+    if (!filteredPosts.length) {
+      posts = await prisma.post.findMany({
+        skip: offset,
+        take: parseInt(limit) * 2, // Fetch extra for filtering
+        where: {
+          UserID: { not: userId }, 
+          VideoURL: { not: null }, // Only posts with videos
+          privacy: { in: ["PUBLIC", "FOLLOWERS_ONLY"] }, // Respect privacy
+          PostID: { in: viewedIds }, // Only viewed posts
+          CreatedAt: { gte: new Date(Date.now() - 730 * 24 * 60 * 60 * 1000) }, // Last 730 days
+        },
+        orderBy: { CreatedAt: "desc" },
+        include: {
+          User: {
+            select: {
+              UserID: true,
+              Username: true,
+              ProfilePicture: true,
+              IsPrivate: true,
+            },
+          },
+          SharedPost: {
+            include: {
+              User: {
+                select: { UserID: true, Username: true, ProfilePicture: true },
+              },
+            },
+          },
+          _count: { select: { Likes: true, Comments: true, Shares: true } },
+        },
+      });
+
+      filteredPosts = posts.filter((p) => {
+        if (p.privacy === "PUBLIC") return true;
+
+        if (p.privacy === "FOLLOWERS_ONLY") {
+          return followingIds.includes(p.User.UserID);
+        }
+
+        return false;
+      });
+
+      isUnseen = false; // These are seen posts
+    }
 
     const postIds = filteredPosts.map((p) => p.PostID);
 
@@ -1236,7 +1306,6 @@ const getFlicks = async (req, res) => {
     const formatted = filteredPosts.map((post) => {
       const isLiked = userLikes.some((l) => l.PostID === post.PostID);
       const isSaved = userSaves.some((s) => s.PostID === post.PostID);
-      const isUnseen = true; // All posts are unseen due to where clause
       const isFollowed = followingIds.includes(post.User.UserID); // Add isFollowed for post's user
 
       // === Likes ===
@@ -1306,7 +1375,7 @@ const getFlicks = async (req, res) => {
         isMine: post.User.UserID === userId,
         isLiked,
         isSaved,
-        isUnseen,
+        isUnseen, // Use the flag: true for unseen, false for seen
         isFollowed, // Include isFollowed for the post's user
         shareCount: post._count.Shares,
         likeCount: post._count.Likes,
