@@ -152,8 +152,9 @@ const search = async (req, res) => {
       const found = await prisma.user.findMany({
         where: {
           OR: [
-            { Username: { contains: query, mode: 'insensitive' } },
-            { Email: { contains: query, mode: 'insensitive' } },
+            { Username: { contains: query, mode: "insensitive" } },
+            { ProfileName: { contains: query, mode: "insensitive" } },
+            { Email: { contains: query, mode: "insensitive" } },
           ],
           NOT: { UserID: userId },
         },
@@ -164,7 +165,7 @@ const search = async (req, res) => {
           Bio: true,
           IsPrivate: true,
         },
-        orderBy: { Username: 'asc' },
+        orderBy: { Username: "asc" },
         skip,
         take: limit,
       });
